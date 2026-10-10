@@ -6,7 +6,7 @@ import { type UIMessage as TanStackUIMessage, type ModelMessage } from "@tanstac
 
 import { getLatestUserMessage } from "../agent/compaction/message-utils.js";
 import { isToolContinuationPrepare } from "../agent/stream/tool-phase-utils.js";
-import { isTerminalStatus } from "../runtime-types/agent-status.js";
+import { isActiveStatus } from "../runtime-types/agent-status.js";
 
 import type { AgentStatus, RunFinalizeReason } from "./agent-types.js";
 import type { RunCoordinator } from "./run-coordinator.js";
@@ -62,21 +62,28 @@ export async function prepareManagedAgentForRun(
 
   host.run.setupAbortController(options.abortSignal, {
     onAborted: () => {
-      // The guard MUST live here, not after `host.run.abort()` below.
+      // Only an IN-FLIGHT run can be turned into an abort.
       //
-      // This listener fires SYNCHRONOUSLY inside `RunCoordinator.abort()`, so by the time
-      // `abortManagedAgentRun` checks the status afterwards, an unconditional `setStatus`
-      // here has already rewritten it — that post-check (`status !== "completed"`) was
-      // therefore dead code, and every teardown of an already-finished agent logged
-      // `completed → aborted`. The session's final status then contradicted
-      // `resolveFinishStatus` / `TERMINAL_STATUSES` (a finished run stays finished), and the
-      // task panel — which snapshots this status — rendered a completed delegation as
-      // cancelled.
+      // The predicate is `isActiveStatus`, deliberately NOT `isTerminalStatus`. Those two
+      // tables answer different questions, and this one asked the wrong table once:
+      //
+      // - `TERMINAL_STATUSES` means "must not be overwritten when a stream finishes
+      //   normally". It therefore EXCLUDES `completed` (that is the value a normal finish
+      //   writes) and INCLUDES `waiting` / `awaiting_user` (a paused run, which can and
+      //   should still be aborted). Using it here left `completed` unguarded — exactly the
+      //   case this exists for — while wrongly refusing to abort an approval pause.
+      // - `ACTIVE_STATUSES` means "currently doing work", which is precisely "aborting this
+      //   has something to change".
+      //
+      // This listener fires SYNCHRONOUSLY inside `RunCoordinator.abort()`, so it runs BEFORE
+      // the status check at the end of `abortManagedAgentRun` — a guard placed after that
+      // call sees the value this line already rewrote, which is how the original
+      // `status !== "completed"` check became dead code.
       //
       // Aborting the CONTROLLER is still correct for a finished agent (late listeners read
-      // `signal.aborted`); rewriting its STATUS is not. An agent already terminal
-      // (completed / aborted / error / waiting / awaiting_user) keeps the status it earned.
-      if (!isTerminalStatus(host.getStatus())) {
+      // `signal.aborted`); rewriting its STATUS is not. A run that already has an outcome
+      // (completed / aborted / error) or never started (idle) keeps the status it has.
+      if (isActiveStatus(host.getStatus())) {
         host.setStatus("aborted");
       }
     },
@@ -179,11 +186,12 @@ export function abortManagedAgentRun(host: RunLifecycleHost, reason?: string): v
   host.emitEvent("agent:abort", { reason: effectiveReason });
   host.run.abort(effectiveReason);
   // The status flip normally already happened in the abort listener above (it fires
-  // synchronously inside `run.abort()`), and that listener is where the terminal guard lives.
-  // This remainder is the no-controller path: an agent that never prepared a run has no
-  // listener to fire, so an explicit abort still needs to record the status.
-  const status = host.getStatus();
-  if (status !== "aborted" && status !== "idle" && status !== "completed") {
+  // synchronously inside `run.abort()`). This remainder covers the no-controller path: an
+  // agent that never prepared a run has no listener to fire, so an explicit abort still
+  // records the status. Same predicate as the listener, for the same reason — and both must
+  // match, or one of them undoes the other (an `error` agent was being relabelled `aborted`
+  // here once the listener stopped pre-empting it).
+  if (isActiveStatus(host.getStatus())) {
     host.setStatus("aborted");
   }
 }

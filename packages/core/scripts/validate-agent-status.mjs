@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  abortManagedAgentRun,
   ACTIVE_STATUSES,
   createAgentStatusController,
   isActiveStatus,
@@ -33,6 +34,20 @@ assert.equal(resolveFinishStatus("waiting", "oops"), "waiting");
 assert.equal(resolveFinishStatus("awaiting_user", ""), "awaiting_user");
 assert.equal(resolveFinishStatus("running", "failed"), "error");
 assert.equal(resolveFinishStatus("responding", ""), "completed");
+
+// The two tables answer DIFFERENT questions, and the abort guard needs the second one.
+//
+// `TERMINAL_STATUSES` means "must not be overwritten when a stream finishes NORMALLY" — so it
+// excludes `completed` (that is the value such a finish writes) and includes `waiting` /
+// `awaiting_user` (paused runs, which can still be aborted). Asking it "has this run ended"
+// returns `false` for `completed`, which is how a guard written against it left the bug it was
+// meant to fix fully intact.
+assert.equal(isTerminalStatus("completed"), false, "`completed` is deliberately NOT terminal");
+assert.equal(isActiveStatus("completed"), false, "…but it is not active either — abort changes nothing");
+assert.equal(isActiveStatus("waiting"), true, "a paused run is still abortable");
+assert.equal(isActiveStatus("awaiting_user"), true);
+assert.equal(isActiveStatus("error"), false);
+assert.equal(isActiveStatus("idle"), false);
 
 const managed = new ManagedAgent(
   { name: "test", model: "gpt-4" },
@@ -215,39 +230,106 @@ assert.equal(managed.getStatus(), "waiting");
   assert.equal(current, "aborted");
 }
 
-// --- the abort listener must not rewrite a terminal status ---
+// --- the abort guard: only an in-flight run is turned into an abort ---
 //
-// Regression: `onAborted` set `aborted` unconditionally, and it fires SYNCHRONOUSLY inside
-// `RunCoordinator.abort()` — so the `status !== "completed"` check that follows in
-// `abortManagedAgentRun` always observed an already-rewritten status and was dead code. Every
-// destroy of a finished agent logged `completed → aborted`, so the session's final status
-// contradicted `resolveFinishStatus` and the task panel rendered completed delegations as
-// cancelled. Asserted at the source because the bug was the *placement* of the guard (before
-// vs after a synchronous call), which no value assertion of the pure helper can see.
+// Regression, in two layers.
+//
+// 1. `onAborted` set `aborted` unconditionally and fires SYNCHRONOUSLY inside
+//    `RunCoordinator.abort()`, so the `status !== "completed"` check after that call in
+//    `abortManagedAgentRun` always saw an already-rewritten status and was dead code. Every
+//    destroy of a finished agent logged `completed → aborted`, and the task panel rendered
+//    completed delegations as cancelled.
+// 2. The first fix used `isTerminalStatus` — which EXCLUDES `completed`, because that table
+//    answers "must not be overwritten when a stream finishes normally". So the guard was
+//    false for exactly the status it needed to protect, and the bug survived a green build.
+//    The predicate must be `isActiveStatus` ("currently doing work" — aborting has something
+//    to change).
+//
+// Asserted at the source because both defects are about placement and predicate choice, which
+// no value assertion of the pure helper can see.
 {
   const src = readFileSync(join(SRC, "managers/managed-agent-run-lifecycle.ts"), "utf8");
   const listener = /onAborted: \(\) => \{([\s\S]*?)\n {6}\}/.exec(src);
   assert.ok(listener, "the abort listener is present");
   const body = listener[1];
   assert.ok(
-    /isTerminalStatus\(host\.getStatus\(\)\)/.test(body),
-    "the listener guards on the terminal table — an already-finished agent keeps its status"
+    /if \(isActiveStatus\(host\.getStatus\(\)\)\)/.test(body),
+    "the listener flips the status only for an ACTIVE run"
   );
-  // The guard must precede the setStatus in the SAME body: a check performed after the write
-  // is the dead-code shape this replaced.
   assert.ok(
-    body.indexOf("isTerminalStatus") < body.indexOf('setStatus("aborted")'),
+    body.indexOf("isActiveStatus") < body.indexOf('setStatus("aborted")'),
     "the guard must be read BEFORE the status is written (the write is unconditional otherwise)"
   );
-  // And no unguarded `setStatus("aborted")` may survive in this module's abort paths.
+  // Both abort paths use the SAME predicate; if one lags, it silently undoes the other (the
+  // post-check relabelled `error` agents as `aborted` once the listener stopped pre-empting
+  // it).
+  const guards = [...src.matchAll(/if \((isActiveStatus|isTerminalStatus)\(host\.getStatus\(\)\)\)/g)];
+  assert.equal(guards.length, 2, "both abort paths are guarded");
+  for (const g of guards) {
+    assert.equal(g[1], "isActiveStatus", "…and with the same predicate");
+  }
+  // No unguarded `setStatus("aborted")` may survive in this module.
   for (const match of src.matchAll(/setStatus\("aborted"\)/g)) {
-    const before = src.slice(Math.max(0, match.index - 400), match.index);
-    const chained = before.lastIndexOf("abortManagedAgentRun(");
-    const enclosing = chained >= 0 ? before.slice(chained) : before;
+    const before = src.slice(Math.max(0, match.index - 500), match.index);
     assert.ok(
-      /isTerminalStatus/.test(enclosing) || /status !== "aborted"/.test(enclosing),
-      'every `setStatus("aborted")` in the run-lifecycle module is behind a terminal guard'
+      /isActiveStatus/.test(before),
+      'every `setStatus("aborted")` in the run-lifecycle module is behind the active-status guard'
     );
+  }
+}
+
+// --- BEHAVIOURAL: the REAL abort path, driven with a real controller ---
+//
+// The source assertions above pin the predicate; this one proves it actually protects the
+// status, through the same functions the runtime calls. It exists because the first fix passed
+// every source assertion and still shipped the bug (the assertion pinned the wrong predicate),
+// and because a reader of the source cannot see that `run.abort()` notifies synchronously.
+{
+  const makeHost = (initialStatus) => {
+    let current = initialStatus;
+    const controller = new AbortController();
+    const host = {
+      id: "behavioural-test",
+      getStatus: () => current,
+      setStatus: (next) => {
+        current = next;
+      },
+      getError: () => "",
+      setError: () => {},
+      emitEvent: () => {},
+      getUI: () => undefined,
+      run: {
+        setupAbortController: (_signal, setup) => {
+          controller.signal.addEventListener("abort", () => setup.onAborted(), { once: true });
+        },
+        abort: (reason) => controller.abort(reason),
+        currentAbortController: controller,
+      },
+    };
+    return { host, controller, status: () => current };
+  };
+
+  // A run that already finished keeps `completed` — the reported defect, reproduced here.
+  {
+    const { host, controller, status } = makeHost("completed");
+    abortManagedAgentRun(host, "Agent destroyed");
+    assert.equal(status(), "completed", "destroying a finished agent must not rewrite its status");
+    assert.equal(controller.signal.aborted, true, "…but the controller IS aborted (late listeners read it)");
+    assert.equal(controller.signal.reason, "Agent destroyed", "…carrying the reason");
+  }
+
+  // An in-flight run becomes aborted.
+  for (const active of ["running", "thinking", "responding", "waiting", "awaiting_user", "compacting"]) {
+    const { host, status } = makeHost(active);
+    abortManagedAgentRun(host, "user-cancelled");
+    assert.equal(status(), "aborted", `an in-flight ${active} run is aborted`);
+  }
+
+  // Terminal / never-started statuses are not relabelled.
+  for (const settled of ["completed", "aborted", "error", "idle"]) {
+    const { host, status } = makeHost(settled);
+    abortManagedAgentRun(host, "Agent destroyed");
+    assert.equal(status(), settled, `abort must not rewrite a ${settled} agent`);
   }
 }
 
