@@ -17,6 +17,13 @@
  * | everything else, with a real trigger | `debug` | the pump's internal bookkeeping |
  * | no trigger (restore, direct set) | `info` | uncommon; likely a state nothing else explains |
  *
+ * "User-driven" is judged by whether another event already records it. The abort has
+ * `agent:abort`; a **manual** compact has nothing —
+ * `compaction:auto-*` is off in the log rules and the only compaction event that fires is
+ * the reactive one, which is internal. So `manual-compact` stays `info`: it is the single
+ * trace a reader has that an operator compacted, and demoting it would delete the fact
+ * rather than denoise it.
+ *
  * The trigger is the discriminator because it is already the vocabulary the status
  * controller uses for *why* it is setting a status (`chunk:tool`, `reconcile`, …), so
  * the policy reads as a list of reasons rather than a list of endpoints.
@@ -60,10 +67,11 @@ const MECHANICAL_TRIGGERS: ReadonlySet<string> = new Set([
   "detached-terminal",
   "reset",
   // Recovery and compaction bookkeeping — each has a dedicated telemetry event.
+  // `manual-compact` is deliberately NOT here: nothing else emits for a user's `/compact`
+  // (see the header), so its status line is the record, not the duplication.
   "recovery-retry",
   "external-error",
   "compaction-end",
-  "manual-compact",
   // Client-side tool handoff.
   "before-tool-call",
   "client-tool-wait",

@@ -59,6 +59,7 @@ import { ToolCompactCache } from "../agent/compaction/tool-compact/tool-compact-
 import { WireProjectionCache } from "../agent/compaction/wire-projection-cache.js";
 import { projectWireFromChannel } from "../agent/compaction/wire-projection.js";
 import { statusTransitionLogLevel } from "../agent/log/status-transition-log.js";
+import { logSubagentLifecycle } from "../agent/log/subagent-log-mirror.js";
 import {
   createSessionSyncTracker,
   type SessionSaveReason,
@@ -135,7 +136,7 @@ import type {
   ExtensionToolDefinition,
 } from "../agent/extension";
 import type { ExtensionTurnContextSection } from "../agent/extension/types.js";
-import type { SubagentLogDetails } from "../agent/log/subagent-log-mirror.js";
+import type { SubagentLifecyclePhase, SubagentLogDetails } from "../agent/log/subagent-log-mirror.js";
 import type { LspExtensionConfig } from "../agent/lsp";
 import type { McpExtensionConfig } from "../agent/mcp";
 import type { McpManager } from "../agent/mcp/manager.js";
@@ -589,32 +590,8 @@ export class ManagedAgent {
    * other consumers should react to. Subagents have no extension runner, so the mirror
    * has to be driven from this side anyway.
    */
-  logSubagentLifecycle(phase: "created" | "started" | "completed" | "stopped", details: SubagentLogDetails): void {
-    const who = details.parentTaskToolCallId
-      ? `subagent ${details.subagentId} [task ${details.parentTaskToolCallId}]`
-      : `subagent ${details.subagentId}`;
-    switch (phase) {
-      case "created":
-        this.log?.debug("system", `Subagent created: ${who}`);
-        return;
-      case "started":
-        this.log?.debug("system", `Subagent started: ${details.description ?? details.subagentId} — ${who}`);
-        return;
-      case "completed":
-        this.log?.info(
-          "system",
-          `Subagent completed: ${details.subagentId}${details.parentTaskToolCallId ? ` [task ${details.parentTaskToolCallId}]` : ""} (${details.iterations ?? 0}/${details.maxIterations ?? 0} iterations, ${details.durationMs ?? 0}ms)`
-        );
-        return;
-      case "stopped":
-        // The user-facing outcome, so it survives the status denoise: a stopped child is
-        // the event a reader is looking for, and the reason is the whole point.
-        this.log?.info(
-          "system",
-          `Subagent ${details.stopReason ?? "stopped"}: ${details.subagentId}${details.parentTaskToolCallId ? ` [task ${details.parentTaskToolCallId}]` : ""}`
-        );
-        return;
-    }
+  logSubagentLifecycle(phase: SubagentLifecyclePhase, details: SubagentLogDetails): void {
+    logSubagentLifecycle(this.log, phase, details);
   }
 
   setStatus(status: AgentStatus, trigger?: string): void {

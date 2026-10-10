@@ -32,10 +32,15 @@ function cancelledStubResult(): SubagentResult {
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, billedInputTokens: 0 },
     reachedLimit: false,
     // `incomplete` means "finished, but not cleanly" — `deriveSubagentRunStats` only ever
-    // sets it on the `!aborted` path, so a cancel can never carry it. This stub is
-    // unreachable today (a registered entry is always joined, and `join` deletes it before
-    // `abortAll` can mark it), but it is the one place that contradicts that invariant, and
-    // `incomplete` is not cancel-aware: a stale flag here would read as "stalled".
+    // sets it on the `!aborted` path, so a cancel can never carry it.
+    //
+    // This stub IS reachable: it is what a discarded pre-fork settles to. An earlier version
+    // of this comment claimed otherwise ("a registered entry is always joined, and `join`
+    // deletes it before `abortAll` can mark it") — which is exactly the assumption the
+    // stream-restart orphan disproved: the restart aborts the run before its tool call comes
+    // back, so nothing ever joins, `abortAll` discards the entry, and this is the output the
+    // awaiting caller receives. `incomplete` stays false because it is not cancel-aware: a
+    // stale flag here would read as "stalled" rather than "stopped".
     incomplete: false,
     aborted: true,
   };
