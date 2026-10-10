@@ -13,7 +13,7 @@
  */
 
 import { runSubagent, subagentResultToTaskOutput } from "../../agent/subagent/run-subagent.js";
-import { getTaskPreforkCoordinator } from "../../agent/subagent/task-prefork.js";
+import { getTaskPreforkCoordinator, type PreforkDiscardCause } from "../../agent/subagent/task-prefork.js";
 import { SUBAGENT_NO_TRUNCATE } from "../../agent/subagent/types.js";
 import { generateId } from "../../utils/generate-id.js";
 
@@ -42,11 +42,22 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
   // Per-stream-epoch state (reset on RUN_STARTED / finish / abort).
   let pendingCalls = new Map<string, PendingTaskCall>();
 
-  const resetEpoch = () => {
+  const resetEpoch = (cause: PreforkDiscardCause) => {
     pendingCalls = new Map();
     const managed = deps.getManagedAgent();
-    if (managed) {
-      getTaskPreforkCoordinator(managed).abortAll();
+    if (!managed) return;
+    // Report what the discard actually threw away. `abortAll` returns one record per tool
+    // call that still had a live run, and the record carries the subagents already spawned
+    // for it — which are the ones this turns into orphans (aborted here, never re-joined
+    // because the tool phase will spawn a second subagent for the same call id when the
+    // call does execute). Dropping that list is what used to make the orphan
+    // indistinguishable from an unrelated subagent in the log.
+    for (const discard of getTaskPreforkCoordinator(managed).abortAll(cause)) {
+      deps.emitEvent?.("subagent:prefork-discarded", {
+        toolCallId: discard.toolCallId,
+        cause: discard.cause,
+        subagentIds: discard.subagentIds,
+      });
     }
   };
 
@@ -57,7 +68,7 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
       if (!managed) return chunk;
 
       if (chunk.type === "RUN_STARTED") {
-        resetEpoch();
+        resetEpoch("new-attempt");
         return chunk;
       }
 
@@ -86,10 +97,10 @@ export function createTaskPreforkMiddleware(deps: TaskPreforkMiddlewareDeps): Ch
       return chunk;
     },
     onFinish: async () => {
-      resetEpoch();
+      resetEpoch("run-finish");
     },
     onAbort: async () => {
-      resetEpoch();
+      resetEpoch("run-abort");
     },
   });
 }
@@ -143,6 +154,10 @@ function trySpawn(
         tool_name: "task",
         tool_call_id: toolCallId,
         tool_input: { prompt, description },
+        // Tells the eager start apart from the tool-phase start of the same call id —
+        // the second line used to be byte-identical, which is why a discarded-then-
+        // respawned pair read as one doubled log line instead of a respawn.
+        source: "prefork",
         timestamp: Date.now(),
       });
     }
@@ -162,9 +177,15 @@ async function runPreForked(
   cleanup: () => void
 ): ReturnType<typeof runSubagent> {
   try {
+    // Pre-allocate the id so the coordinator can record it before the run starts: a spawn
+    // that is discarded while queued never reaches `runSubagent`, and one discarded right
+    // after starting must still be reportable as an orphan.
+    const subagentId = generateId("subagent", { exists: (id) => deps.manager.getAgent(id) != null });
+    const managed = deps.getManagedAgent?.();
+    if (managed) getTaskPreforkCoordinator(managed).recordSpawn(toolCallId, subagentId);
     const result = await runSubagent(
       {
-        subagentId: generateId("subagent", { exists: (id) => deps.manager.getAgent(id) != null }),
+        subagentId,
         prompt: args.prompt,
         description: args.description,
         parentAgentId,

@@ -164,8 +164,12 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
     /** `begin_summary` call site — the subagent is writing its own report. */
     const enterSummaryPhase = () => enterPhase("summary");
 
-    subagent.emitEvent("subagent:created", { subagentId }, { parentId: parentAgentId });
-    subagent.emitEvent("subagent:started", { subagentId, description }, { parentId: parentAgentId });
+    subagent.emitEvent("subagent:created", { subagentId, parentTaskToolCallId }, { parentId: parentAgentId });
+    subagent.emitEvent(
+      "subagent:started",
+      { subagentId, description, parentTaskToolCallId },
+      { parentId: parentAgentId }
+    );
 
     subagentManaged.resetTurnLifecycle();
 
@@ -247,7 +251,11 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
         } catch {
           // ignore finalize errors while propagating the run failure
         }
-        subagent.emitEvent("subagent:error", { subagentId, error: errorMessage }, { parentId: parentAgentId });
+        subagent.emitEvent(
+          "subagent:error",
+          { subagentId, error: errorMessage, parentTaskToolCallId },
+          { parentId: parentAgentId }
+        );
         throw err;
       }
     }
@@ -365,16 +373,17 @@ async function executeSubagentRun(config: SubagentConfig, manager: AgentManager)
       aborted ? "subagent:error" : "subagent:completed",
       aborted
         ? {
-            subagentId,
-            // On a cancel the payload carries the partial narration, which is a
-            // summary of work done — not a fault. The flag is what tells the log
-            // bridge (and any other consumer) which of the two it is holding; the
-            // `error` field keeps the text so nothing is lost.
-            error: finalOutput,
+            // A cancel reuses the abort branch, so the flag leads: `error` then holds the
+            // partial narration — a summary of work done, not a fault — and the flag is
+            // what tells the log bridge (and any other consumer) which of the two it has.
             cancelled: true,
+            subagentId,
+            parentTaskToolCallId,
+            error: finalOutput,
           }
         : {
             subagentId,
+            parentTaskToolCallId,
             summary: finalOutput,
             iterations: statusFlags.iterations,
             // Recorded next to the count so the persisted log data carries the budget the

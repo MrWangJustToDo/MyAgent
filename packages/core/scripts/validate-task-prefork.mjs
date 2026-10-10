@@ -133,6 +133,69 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   assert.equal(aborts.length, MAX_ACTIVE_TASK_PREFORKS + 2, "every run's cancel handle fired");
 }
 
+// --- abortAll(cause) reports what it discarded, with the spawned subagents ---
+//
+// This is the record the middleware turns into `subagent:prefork-discarded`, and the only
+// thing that names an orphan: a pre-fork thrown away AFTER it spawned its subagent leaves
+// that subagent aborted-with-no-join, while the tool phase spawns a second one for the same
+// call id. Without the record the two are indistinguishable in the log.
+
+{
+  const coordinator = new TaskPreforkCoordinator();
+  coordinator.start(
+    "discarded",
+    () => {},
+    () => new Promise(() => {})
+  );
+  coordinator.recordSpawn("discarded", "subagent-orphan");
+  coordinator.start(
+    "finished",
+    () => {},
+    async () => ({ subagentId: "subagent-real", output: "done" })
+  );
+  coordinator.recordSpawn("finished", "subagent-real");
+
+  // A call that completed normally is joined away — it must never be reported.
+  const joined = await coordinator.join("finished");
+  assert.ok(joined, "the joined call returns its result");
+
+  const discarded = coordinator.abortAll("run-finish");
+  assert.equal(discarded.length, 1, "only the still-registered call is reported");
+  assert.equal(discarded[0].toolCallId, "discarded");
+  assert.equal(discarded[0].cause, "run-finish", "the cause is carried through");
+  assert.deepEqual(
+    discarded[0].subagentIds,
+    ["subagent-orphan"],
+    "the record names the subagent that was already spawned — the orphan"
+  );
+
+  // Without a cause the coordinator stays silent: the plain reset (no reporting path)
+  // must not manufacture records for callers that do not consume them.
+  const coordinator2 = new TaskPreforkCoordinator();
+  coordinator2.start(
+    "quiet",
+    () => {},
+    () => new Promise(() => {})
+  );
+  assert.deepEqual(coordinator2.abortAll(), [], "a causeless abortAll reports nothing");
+
+  // An entry already aborted is not reported twice (idempotence of a double reset).
+  const again = coordinator.abortAll("run-abort");
+  assert.deepEqual(again, [], "a reset after a reset discards nothing");
+}
+
+// --- recordSpawn is a no-op for an unregistered call ---
+
+{
+  const coordinator = new TaskPreforkCoordinator();
+  // The serial fallback path runs the subagent without registering a pre-fork; recording
+  // must not create an entry (the tool call would then be reported as discarded on the
+  // next reset even though nothing was ever thrown away).
+  coordinator.recordSpawn("never-registered", "subagent-x");
+  assert.equal(coordinator.has("never-registered"), false, "recordSpawn does not register an entry");
+  assert.deepEqual(coordinator.abortAll("new-attempt"), [], "and nothing is reported for it");
+}
+
 // --- queued run aborted before admission never runs ---
 
 {

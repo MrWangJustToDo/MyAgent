@@ -63,6 +63,16 @@ export type AgentEventPayloadMap = {
     tool_name?: string;
     tool_call_id?: string;
     tool_input?: unknown;
+    /**
+     * How the call was dispatched, when that is not the ordinary tool phase.
+     *
+     * `"prefork"` marks the eager start of a `task` subagent while its arguments were
+     * still streaming (see `task-prefork-middleware`). The same `tool_call_id` is started a
+     * second time by the tool phase when the eager run is thrown away, and without this
+     * field the two `Tool start: task` lines are indistinguishable — which is exactly what
+     * hid a discarded-then-respawned subagent pair (one orphan, one real) from the log.
+     */
+    source?: "prefork";
     timestamp?: number;
   };
   "agent:tool-approval-request": {
@@ -217,10 +227,32 @@ export type AgentEventPayloadMap = {
   "compaction:reactive-max-retries": EmptyAgentEventPayload;
   "subagent:created": {
     subagentId?: string;
+    /**
+     * The parent `task` tool call this subagent serves.
+     *
+     * Without it a subagent's lifecycle is only attributable to the parent *agent*, so two
+     * children spawned under one `task` call (a discarded eager one and the real one) look
+     * like unrelated subagents. The id makes the pairing greppable from either side.
+     */
+    parentTaskToolCallId?: string;
   };
   "subagent:started": {
     subagentId?: string;
     description?: string;
+    parentTaskToolCallId?: string;
+  };
+  "subagent:prefork-discarded": {
+    /** The `task` tool call whose eagerly started run was thrown away. */
+    toolCallId?: string;
+    /**
+     * Why the run was discarded. `new-attempt` is a restarted stream (the tool calls are
+     * re-stranded with fresh ids), `run-finish`/`run-abort` are the attempt ending. A
+     * discarded run whose tool call is still going to execute means the tool phase will
+     * spawn a *second* subagent for the same call id.
+     */
+    cause?: "new-attempt" | "run-finish" | "run-abort";
+    /** Subagents already spawned for the call, whose work was aborted (orphaned). */
+    subagentIds?: string[];
   };
   "subagent:completed": {
     subagentId?: string;
@@ -233,10 +265,12 @@ export type AgentEventPayloadMap = {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    parentTaskToolCallId?: string;
   };
   "subagent:error": {
     subagentId?: string;
     error?: string;
+    parentTaskToolCallId?: string;
     /**
      * True when the run was cut short by the user rather than failing.
      *
@@ -249,6 +283,7 @@ export type AgentEventPayloadMap = {
   };
   "subagent:destroyed": {
     subagentId?: string;
+    parentTaskToolCallId?: string;
   };
   "subagent:phase": {
     subagentId?: string;

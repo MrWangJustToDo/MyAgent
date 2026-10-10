@@ -11,6 +11,18 @@ function p(event: AgentEvent): Record<string, unknown> {
   return event.payload as Record<string, unknown>;
 }
 
+/**
+ * Append the parent `task` call binding so a subagent line is attributable to its call.
+ *
+ * Without it, two children of the same `task` call (a discarded eager one and the real
+ * one) read as two unrelated subagents, and the pairing has to be reconstructed by
+ * timestamp. Omitted when the subagent has no task binding (an internal worker).
+ */
+function taskBindingSuffix(payload: Record<string, unknown>): string {
+  const id = payload.parentTaskToolCallId;
+  return typeof id === "string" && id.length > 0 ? ` [task ${id}]` : "";
+}
+
 export interface EventLogRule {
   level: LogLevel;
   category: LogCategory;
@@ -178,7 +190,13 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "agent:tool-start": {
     level: "debug",
     category: "tool",
-    formatMessage: (event) => `Tool start: ${p(event).tool_name ?? "unknown"}`,
+    // An eager pre-fork start is labelled: the same call id is started again by the tool
+    // phase whenever the eager run was discarded, and two identical lines is what let a
+    // discarded subagent hide in plain sight.
+    formatMessage: (event) =>
+      p(event).source === "prefork"
+        ? `Tool start: ${p(event).tool_name ?? "unknown"} (pre-fork)`
+        : `Tool start: ${p(event).tool_name ?? "unknown"}`,
   },
   "agent:tool-approval-request": {
     level: "info",
@@ -263,17 +281,29 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "subagent:created": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent created: ${p(event).subagentId ?? event.agentId}`,
+    formatMessage: (event) => `Subagent created: ${p(event).subagentId ?? event.agentId}${taskBindingSuffix(p(event))}`,
   },
   "subagent:started": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent started: ${p(event).description ?? event.agentId}`,
+    formatMessage: (event) =>
+      `Subagent started: ${p(event).description ?? event.agentId}${taskBindingSuffix(p(event))}`,
+  },
+  /** An eagerly started `task` run was thrown away — the line that names an orphan. */
+  "subagent:prefork-discarded": {
+    level: "warn",
+    category: "system",
+    formatMessage: (event) => {
+      const ids = p(event).subagentIds;
+      const spawned =
+        Array.isArray(ids) && ids.length > 0 ? ` — aborted ${ids.join(", ")}` : " — no subagent spawned yet";
+      return `Pre-fork discarded (${p(event).cause ?? "unknown"}): tool call ${p(event).toolCallId ?? "?"}${spawned}`;
+    },
   },
   "subagent:completed": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent completed: ${p(event).summary ?? "(no summary)"}`,
+    formatMessage: (event) => `Subagent completed: ${p(event).summary ?? "(no summary)"}${taskBindingSuffix(p(event))}`,
   },
   "subagent:error": {
     level: "error",
@@ -285,8 +315,8 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
     // `agent:tool-error` handles the same two-way payload.
     formatMessage: (event) =>
       p(event).cancelled === true
-        ? `Subagent cancelled: ${p(event).subagentId ?? event.agentId}`
-        : `Subagent error: ${p(event).error ?? "unknown"}`,
+        ? `Subagent cancelled: ${p(event).subagentId ?? event.agentId}${taskBindingSuffix(p(event))}`
+        : `Subagent error: ${p(event).error ?? "unknown"}${taskBindingSuffix(p(event))}`,
   },
   "subagent:progress-summary-error": {
     level: "warn",
@@ -297,7 +327,8 @@ const TELEMETRY_EVENT_LOG_RULES: Record<keyof AgentEventPayloadMap, EventLogRule
   "subagent:destroyed": {
     level: "info",
     category: "system",
-    formatMessage: (event) => `Subagent destroyed: ${p(event).subagentId ?? event.agentId}`,
+    formatMessage: (event) =>
+      `Subagent destroyed: ${p(event).subagentId ?? event.agentId}${taskBindingSuffix(p(event))}`,
   },
   "subagent:phase": {
     level: "debug",

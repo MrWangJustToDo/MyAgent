@@ -394,7 +394,11 @@ export class AgentManager {
         parent.childIds = parent.childIds.filter((cid) => cid !== id);
         parent.updatedAt = Date.now();
       }
-      managedAgent.emitEvent("subagent:destroyed", { subagentId: id }, { parentId: managedAgent.parentId });
+      managedAgent.emitEvent(
+        "subagent:destroyed",
+        { subagentId: id, parentTaskToolCallId: managedAgent.parentTaskId },
+        { parentId: managedAgent.parentId }
+      );
     }
 
     // Teardown extensions: emit interceptable session:shutdown first (so extensions can

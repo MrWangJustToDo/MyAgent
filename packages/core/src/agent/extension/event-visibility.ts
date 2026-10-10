@@ -70,6 +70,7 @@ export const EXTENSION_EVENT_VISIBILITY = {
   // Subagents
   "subagent:created": "observable",
   "subagent:started": "observable",
+  "subagent:prefork-discarded": "observable",
   "subagent:completed": "observable",
   "subagent:error": "observable",
   "subagent:destroyed": "observable",

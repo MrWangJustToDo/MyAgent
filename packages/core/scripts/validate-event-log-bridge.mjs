@@ -193,6 +193,71 @@ const realSubEntry = entries.find(
 assert.match(realSubEntry.message, /^Subagent error: 429 after retries/, "a genuine failure keeps its wording");
 assert.equal(realSubEntry.error?.message, "429 after retries", "and still carries the fault");
 
+// --- the parent `task` call binding ---
+//
+// A subagent line is attributable to the `task` call that spawned it. Without the binding a
+// discarded eager pre-fork and the real subagent spawned afterwards for the SAME call id
+// read as two unrelated subagents, and the pairing can only be reconstructed by timestamp.
+entries = await emitAndRead({
+  type: "subagent:completed",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { subagentId: "subagent-3", summary: "done", parentTaskToolCallId: "call-01" },
+});
+const boundEntry = entries.find(
+  (entry) => entry.event === "subagent:completed" && entry.data?.subagentId === "subagent-3"
+);
+assert.ok(boundEntry, "subagent:completed is bridged");
+assert.ok(boundEntry.message.includes("[task call-01]"), "the line names its parent task call");
+
+// --- a discarded pre-fork is recorded, with the orphan it created ---
+//
+// This is the line that turns an unexplained aborted subagent into a stated cause: the
+// eager run was thrown away (and its already-spawned subagent aborted), while the tool
+// phase will spawn a second subagent for the same call id.
+entries = await emitAndRead({
+  type: "subagent:prefork-discarded",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { toolCallId: "call-01", cause: "run-finish", subagentIds: ["subagent-orphan"] },
+});
+const discardEntry = entries.find(
+  (entry) => entry.event === "subagent:prefork-discarded" && entry.data?.toolCallId === "call-01"
+);
+assert.ok(discardEntry, "subagent:prefork-discarded is bridged");
+assert.match(discardEntry.message, /^Pre-fork discarded \(run-finish\)/, "the cause is in the wording");
+assert.ok(discardEntry.message.includes("call-01"), "and so is the tool call id");
+assert.ok(discardEntry.message.includes("subagent-orphan"), "naming the orphan it aborted");
+assert.equal(discardEntry.level, "warn", "a discard is a warning, not routine info");
+
+// A discard with nothing spawned yet still records the discard, and says so — the pending
+// pre-fork is just as discardable as a started one.
+entries = await emitAndRead({
+  type: "subagent:prefork-discarded",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { toolCallId: "call-02", cause: "new-attempt", subagentIds: [] },
+});
+const pendingDiscard = entries.find(
+  (entry) => entry.event === "subagent:prefork-discarded" && entry.data?.toolCallId === "call-02"
+);
+assert.match(pendingDiscard.message, /no subagent spawned yet/, "an unspawned discard says nothing was orphaned");
+
+// --- the eager pre-fork start is labelled apart from the tool-phase start ---
+//
+// Both carry the same tool_call_id; without the label the two lines are byte-identical and
+// a discarded-then-respawned pair reads as one doubled line.
+entries = await emitAndRead({
+  type: "agent:tool-start",
+  ts: Date.now(),
+  agentId: "agent-1",
+  payload: { tool_name: "task", tool_call_id: "call-03", source: "prefork" },
+});
+const preforkStart = entries.find(
+  (entry) => entry.event === "agent:tool-start" && entry.data?.tool_call_id === "call-03"
+);
+assert.match(preforkStart.message, /^Tool start: task \(pre-fork\)/, "the eager start is labelled");
+
 console.log("bridged entries persisted to JSONL sink: OK");
 console.log("payload summarization (bytes+preview, no eventType): OK");
 console.log("memory debug streams silent: OK");

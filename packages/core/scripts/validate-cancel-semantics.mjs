@@ -473,9 +473,14 @@ assert.equal(taskOutputSchema.shape.cancelled, undefined, "task declares ONE mar
   );
 
   const runSubagentSrc2 = readFileSync(join(SRC, "agent/subagent/run-subagent.ts"), "utf8");
+  // Structural, not proximity-based: `cancelled: true` must be the FIRST key of the abort
+  // branch. The branch is where the flag is decided, and leading with it is what keeps a
+  // later field insertion (a new id next to the others) from pushing the flag out of a
+  // character window — which is how this assertion was silently satisfied by accident
+  // once already. The ordering is the read, so assert the ordering.
   assert.ok(
-    /aborted\s*\?\s*\{[\s\S]{0,400}cancelled: true/.test(runSubagentSrc2),
-    "subagent:error marks the abort branch it reuses for a cancel"
+    /aborted\s*\?\s*\{\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)*cancelled:\s*true/.test(runSubagentSrc2),
+    "subagent:error leads its abort branch with the cancel flag (the branch it reuses for a cancel)"
   );
 
   // The log wording follows the flag on all three, so the flag cannot be set without the

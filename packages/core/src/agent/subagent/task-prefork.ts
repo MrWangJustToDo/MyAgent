@@ -41,12 +41,30 @@ function cancelledStubResult(): SubagentResult {
   };
 }
 
+export type PreforkDiscardCause = "new-attempt" | "run-finish" | "run-abort";
+
+/** One tool call whose eagerly started run was thrown away. */
+export interface PreforkDiscard {
+  toolCallId: string;
+  cause: PreforkDiscardCause;
+  /** Subagents already spawned for the call — aborted by this discard, so orphaned. */
+  subagentIds: string[];
+}
+
 interface PreforkEntry {
   /** "queued" until its gate opens, "running" once the factory may proceed. */
   state: "queued" | "running";
   /** Whether this entry currently occupies a concurrency slot. */
   occupying: boolean;
   aborted: boolean;
+  /**
+   * Subagents this entry has spawned so far.
+   *
+   * Read by {@link TaskPreforkCoordinator.abortAll}'s caller so a discarded pre-fork can
+   * report which children it orphaned. Normally one, but a restart-style retry inside the
+   * run appends another — and an abandoned child is exactly what the report exists for.
+   */
+  spawned: string[];
   gate: Promise<void>;
   openGate: () => void;
   abortHandle: () => void;
@@ -72,6 +90,56 @@ export class TaskPreforkCoordinator {
   }
 
   /**
+   * Record a subagent spawned by this tool call's run.
+   *
+   * The runner has the id and the coordinator is the only object that outlives a discarded
+   * run, so the record lands here: when {@link abortAll} throws the run away, the caller can
+   * say which subagents were orphaned instead of leaving that to be reconstructed from
+   * timestamps (which is what an orphan used to look like from the log — a subagent with no
+   * binding to the `task` call that spawned it). No-op for an unknown id (the run was never
+   * registered, e.g. the serial fallback path).
+   */
+  recordSpawn(toolCallId: string, subagentId: string): void {
+    const entry = this.entries.get(toolCallId);
+    if (!entry) return;
+    entry.spawned.push(subagentId);
+  }
+
+  /**
+   * Cancel every registered run (queued ones settle with a stub) and reset.
+   *
+   * @returns one record per discarded tool call when a cause is given — the tool call id
+   * and the subagents that were already spawned for it, so the caller can report the
+   * orphan instead of dropping the information on the floor. The coordinator itself stays
+   * silent (it has no logger and is deliberately transport-free), and an *accepted* join
+   * removes the entry first, so a call that completed normally is never reported.
+   */
+  abortAll(cause?: PreforkDiscardCause): PreforkDiscard[] {
+    const discarded: PreforkDiscard[] = [];
+    for (const [toolCallId, entry] of this.entries) {
+      if (cause && !entry.aborted) {
+        discarded.push({ toolCallId, cause, subagentIds: [...entry.spawned] });
+      }
+      if (entry.aborted) continue;
+      entry.aborted = true;
+      if (!entry.occupying) {
+        // Never started — settle immediately without consuming a slot.
+        this.waiting.delete(entry);
+        entry.openGate();
+      }
+    }
+    for (const entry of this.entries.values()) {
+      try {
+        entry.abortHandle();
+      } catch {
+        // Cleanup must never mask the original failure.
+      }
+    }
+    this.entries.clear();
+    return discarded;
+  }
+
+  /**
    * Register a background run. Duplicate ids are ignored (returns true);
    * beyond the concurrency cap runs queue FIFO and roll forward as slots free.
    *
@@ -94,6 +162,7 @@ export class TaskPreforkCoordinator {
       state: "queued",
       occupying: false,
       aborted: false,
+      spawned: [],
       gate,
       openGate,
       abortHandle,
@@ -127,27 +196,6 @@ export class TaskPreforkCoordinator {
     if (!entry) return null;
     this.entries.delete(toolCallId);
     return entry.promise;
-  }
-
-  /** Cancel every registered run (queued ones settle with a stub) and reset. */
-  abortAll(): void {
-    for (const entry of this.entries.values()) {
-      if (entry.aborted) continue;
-      entry.aborted = true;
-      if (!entry.occupying) {
-        // Never started — settle immediately without consuming a slot.
-        this.waiting.delete(entry);
-        entry.openGate();
-      }
-    }
-    for (const entry of this.entries.values()) {
-      try {
-        entry.abortHandle();
-      } catch {
-        // Cleanup must never mask the original failure.
-      }
-    }
-    this.entries.clear();
   }
 
   private admit(entry: PreforkEntry): void {
