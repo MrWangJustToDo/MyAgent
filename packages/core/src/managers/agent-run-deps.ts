@@ -1,6 +1,6 @@
 import type { AgentManager } from "./agent-manager.js";
 import type { AgentStatusController } from "./controllers/agent-status-controller.js";
-import type { ManagedAgentConfig } from "./managed-agent.js";
+import type { ManagedAgent, ManagedAgentConfig } from "./managed-agent.js";
 import type { RunCoordinator } from "./run-coordinator.js";
 import type { AgentLog } from "../agent/agent-log";
 import type { SessionService } from "./services/session-service.js";
@@ -84,4 +84,55 @@ export interface AgentRunDeps {
   getTurnContextAdmitMessageCount: () => number;
   setTurnContextAdmitMessageCount: (count: number) => void;
   commitSurfacedMemories: () => void;
+}
+
+/**
+ * Build the complete {@link AgentRunDeps} surface for runner assembly.
+ *
+ * The collaborator fields are captured references, which is safe only because they are
+ * set once at construction; everything that can change while the (cached) runner is alive
+ * is exposed as an accessor instead. See the liveness contract on {@link AgentRunDeps}.
+ *
+ * **One module, one producer.** The interface and its factory shipped separately
+ * (`agent-run-deps.ts` + `managed-agent-deps.ts`) while an earlier task moved the bag out of
+ * `ManagedAgent`. It stayed split afterwards with no second producer and no consumer outside
+ * `managers/` — the type is referenced only by this file, `run-agent.ts` and the gate that reads
+ * `agent-run-deps.ts` as text. Two files, one topic, so they are one file: a reader asking
+ * "what does the runner need, and where does it come from" gets both answers here, and a field
+ * added to one half in isolation is no longer a possible mistake. The liveness split above is
+ * real and stays; the file split was not.
+ */
+export function buildManagedAgentDeps(managed: ManagedAgent, manager: AgentManager): AgentRunDeps {
+  return {
+    agentId: managed.id,
+    manager,
+    usage: managed.usage,
+    session: managed.session,
+    usageHistory: managed.usageHistory,
+    statusController: managed.statusController,
+    approvals: managed.approvals,
+    run: managed.run,
+    planMode: managed.planMode,
+    getLog: () => managed.getLog(),
+    getTodoManager: () => managed.getTodoManager(),
+    getExtensionRunner: () => managed.getExtensionRunner(),
+    getCompactionConfig: () => managed.getCompactionConfig(),
+    getModelInfo: () => managed.getModelInfo(),
+    getToolCompactCache: () => managed.getToolCompactCache(),
+    getWireProjectionCache: () => managed.getWireProjectionCache(),
+    getSystemPrompt: () => managed.getSystemPrompt(),
+    getFrozenSystemPrompt: () => managed.getFrozenSystemPrompt(),
+    getUIChannel: () => managed.getUI() ?? null,
+    config: managed.config,
+    parentId: managed.parentId,
+    shouldTriggerAutoCompact: (messages) => managed.shouldTriggerAutoCompact(messages),
+    shouldPersistUIMessage: (messages, reason) => managed.maybeSaveSessionUIMessages(messages, reason),
+    setIterationProgress: (state) => managed.setIterationProgress(state),
+    getDynamicTurnContextSections: () => managed.getDynamicTurnContextSections(),
+    getAdmittedContextHashes: () => managed.getAdmittedContextHashes(),
+    setAdmittedContextHashes: (hashes) => managed.setAdmittedContextHashes(hashes),
+    getTurnContextAdmitMessageCount: () => managed.getTurnContextAdmitMessageCount(),
+    setTurnContextAdmitMessageCount: (count) => managed.setTurnContextAdmitMessageCount(count),
+    commitSurfacedMemories: () => managed.memory.commitSurfacedMemories(),
+  };
 }

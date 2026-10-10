@@ -10,8 +10,8 @@ import { createTextAdapter } from "../models/adapter/adapter-factory.js";
 import { resolvePromptCacheKey } from "../models/cache/prompt-cache.js";
 import { DEFAULT_BASE_URLS } from "../models/config/model-config.js";
 
+import { buildManagedAgentDeps } from "./agent-run-deps.js";
 import { DEFAULT_AGENT_MAX_ITERATIONS } from "./agent-types.js";
-import { buildManagedAgentDeps } from "./managed-agent-deps.js";
 import {
   createApprovalResumeMiddleware,
   createBackgroundNotificationMiddleware,
