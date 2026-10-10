@@ -364,14 +364,17 @@ Rules that keep `packages/core` internally consistent. Deviations need a reason 
 
 **File size**
 
-- Keep files ≤ 400 lines where a cohesive boundary exists (`.cursor/rules/040`). Files that
-  legitimately exceed it (`managed-agent.ts` as composition root) document the trade-off
-  instead of being cut arbitrarily: the `/* eslint-disable max-lines */` at the top of such a
-  file must be paired with a written justification naming what the file composes and which
-  parts were extracted instead (`run-coordinator.ts`, `managed-agent-runner-wiring.ts`,
-  `managed-agent-compact.ts`). An unexplained disable is a silent exemption, and this file's
-  carried one long enough for the tracker to mark it done at 514 lines and never revisit it at
-  1750.
+- Keep files ≤ **400 lines** where a cohesive boundary exists (`.cursor/rules/040`). This is the
+  design guideline, not the enforced gate: `eslint.config.cjs` raises `max-lines` to **800** for
+  this repo, so a file between the two numbers passes lint without an exemption — the gap is a
+  deliberate allowance for cohesive modules, not a licence to keep growing one. Files that
+  legitimately exceed **400** document the trade-off instead of being cut arbitrarily: the
+  `/* eslint-disable max-lines */` at the top of such a file must be paired with a written
+  justification naming what the file composes and which parts were extracted instead
+  (`run-coordinator.ts`, `managed-agent-runner-wiring.ts`, `managed-agent-compact.ts`). An
+  unexplained disable is a silent exemption, and this file's carried one long enough for the
+  tracker to mark it done at 514 lines and never revisit it at 1750. A file that needs the 800
+  ceiling at all should say so in its header, because at that size a reader is owed the reason.
 
 ### Error Handling
 ```typescript

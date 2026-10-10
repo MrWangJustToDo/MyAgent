@@ -65,6 +65,11 @@ module.exports = [
     },
   },
   {
+    // Deliberate loosening of the shared 400-line default (`project-tool/…/base.ts`). The design
+    // guideline stays 400 (`.cursor/rules/040`, `AGENTS.md`); this is the enforced ceiling, and
+    // the two numbers are documented together so the gap cannot read as a silent override. A
+    // file that needs 800 should justify itself in its header — see the barrel of candidates in
+    // `AGENTS.md` "File size".
     rules: {
       "max-lines": ["error", { max: 800, skipBlankLines: true }],
     },

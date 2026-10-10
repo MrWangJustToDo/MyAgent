@@ -7,6 +7,12 @@ alwaysApply: true
 
 Keep individual source files reasonably small and focused. A file should be at most 400 lines by default.
 
+This is the design guideline; the enforced gate is looser. `eslint.config.cjs` raises `max-lines`
+to **800** non-blank lines for this repo, so a file in the 400–800 band passes lint without an
+exemption. The gap is deliberate — a cohesive module is better than an arbitrary cut — but it is
+not a licence to keep growing one: a file that needs the 800 ceiling should say why in its header,
+and a file that needs `/* eslint-disable max-lines */` must pair it with a written justification.
+
 - Before adding logic to a file near 400 lines, consider extracting cohesive logic into a new helper, hook, component, module, or type file.
 - When a file exceeds 400 lines, look for natural boundaries and split by responsibility instead of making arbitrary line-count cuts.
 - Prefer composition and small focused modules over large files that mix unrelated concerns.
