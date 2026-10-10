@@ -4,7 +4,7 @@ Tracking redundant, overlapping, and unclear responsibilities in `packages/core`
 
 **Related:** [design.md](./design.md) · [tasks.md](./tasks.md) · [proposal.md](./proposal.md)
 
-**Last reviewed:** 2026-09-24
+**Last reviewed:** 2026-10-10
 
 ---
 
@@ -179,7 +179,7 @@ managers/ — runtime orchestration (agent/ imports managers types + injected de
 | P3-3 | `UsageTracker.add()` deprecated alias | `usage-tracker.ts` | `[x]` | Removed |
 | P3-4 | `SubagentResultLegacy` deprecated type | `subagent/types.ts` | `[x]` | Removed |
 | P3-5 | `config` vs `agentConfig` duplicate on ManagedAgent | `managed-agent.ts` | `[ ]` | Consolidate to parsed config only |
-| P3-6 | Stale design.md run-path diagram | `design.md` lines 5–17 | `[ ]` | Update to post-merge path (Phase D) |
+| P3-6 | Stale design.md run-path diagram | `design.md` lines 5–17 | `[—]` | Won't fix: the block is labelled **"Current run path"** under `## Context`, with a **"Problem:"** line beneath it — it is the premise the proposal argues against, not a claim about today. Two agents now exist to keep them from drifting into it: the post-merge path is documented current in `packages/core/ARCHITECTURE.md`, and `design.md` opened by stating "`Base.ts` and `AgentLoopHost` were removed by the TanStack migration it depends on." Rewriting the Context block would falsify the record. |
 
 ---
 
@@ -249,6 +249,7 @@ flowchart LR
 
 | Date | Change |
 |------|--------|
+| 2026-10-10 | Close-out: D.1/D.2 confirmed landed (AGENTS.md `ManagedAgent` hub + `CLAUDE.md` quick reference); D.4 swept clean; V.6 became automated (`validate:reactive-compact` drives `handleManagedReactiveCompact`); P3-6 marked won't-fix (Context block is pre-change by design) |
 | 2026-07-07 | P1-1 headless manager injection; subagent UI → `ManagedAgent.ui`; remove `subagentPreviewStore` |
 | 2026-07-07 | Phase C + E.7–E.9: ManagedAgent type migration, buildManagedAgentDeps, webfetch/websearch injection |
 | 2026-07-07 | Phase E: compaction unify, event cleanup, session restore, AgentFactory, subagent deps, loop shim cleanup |

@@ -82,7 +82,7 @@
 ## 10. Complete Vercel AI SDK Removal (Phase 5 — required for done)
 
 - [ ] 10.1 Audit all Vercel imports: `rg 'from "ai"|from "@ai-sdk' packages/` and track every file to migrate
-- [ ] 10.2 Remove `Agent.ts`, `Base.ts`, and Vercel `Agent` interface implementation
+- [x] 10.2 Remove `Agent.ts`, `Base.ts`, and Vercel `Agent` interface implementation — **superseded** by `core-structure-convergence` (Phase A/B): `ManagedAgent` is now the single runtime object, and `Agent.ts` / `Base.ts` / `agent-loop-host.ts` / `loop/types.ts` were deleted there. Nothing left to do under this item.
 - [ ] 10.3 Remove `packages/core/src/models/factory.ts` (Vercel `createModel`, `LanguageModel`, `wrapLanguageModel`, `extractReasoningMiddleware`)
 - [ ] 10.4 Remove Vercel re-exports from `packages/core/src/index.ts` (`DirectChatTransport`, `ToolLoopAgent`, `LanguageModel`, `VercelUIMessage`)
 - [ ] 10.5 Remove Vercel deps from `packages/core/package.json`: `ai`, `@ai-sdk/openai`, `@ai-sdk/deepseek`, `@ai-sdk/mcp`, `@ai-sdk/provider`, `@ai-sdk/provider-utils`, `@ai-sdk/devtools`, `@openrouter/ai-sdk-provider`, `ai-sdk-ollama`
