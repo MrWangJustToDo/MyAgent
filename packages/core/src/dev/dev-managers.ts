@@ -26,6 +26,7 @@ export type {
 } from "../agent/agent-event-bus/index.js";
 export { bridgeTelemetryToAgentLog, summarizePayload } from "../agent/log/event-log-bridge.js";
 export { DEFAULT_EVENT_LOG_RULES } from "../agent/log/event-log-rules.js";
+export { statusTransitionLogLevel } from "../agent/log/status-transition-log.js";
 export { createJsonlFileSink } from "../agent/log/jsonl-file-sink.js";
 export { createLogExtension } from "../agent/log/extension.js";
 export type { LogExtension, LogExtensionOptions, EventLogPolicy } from "../agent/log/extension.js";
