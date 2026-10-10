@@ -3,11 +3,12 @@
  *
  * Provider architecture:
  * - Brave Search API (when toolConfig.websearch.braveApiKey is set)
- * - DuckDuckGo HTML search (free, no API key required, fallback)
+ * - Exa public MCP endpoint (free, no API key required — default free provider)
+ * - DuckDuckGo HTML search (free, no API key required, last-resort fallback)
  *
  * Provider selection via ProviderManager:
- * 1. toolConfig.websearch.provider can override (e.g., "brave", "duckduckgo", "auto")
- * 2. auto mode: Brave (if key available) → DuckDuckGo
+ * 1. toolConfig.websearch.provider can override (e.g., "brave", "exa", "duckduckgo", "auto")
+ * 2. auto mode: Brave (if key available) → Exa → DuckDuckGo
  * 3. On failure, automatically falls back to the next available provider
  */
 
@@ -68,6 +69,7 @@ export type WebsearchOutput = z.infer<typeof websearchOutputSchema>;
  *
  * Features:
  * - Brave Search API (when toolConfig.websearch.braveApiKey is set)
+ * - Exa public MCP search (free, no API key, default)
  * - DuckDuckGo HTML search (free, no API key, fallback)
  * - Automatic provider selection and fallback
  * - Domain filtering (allow/block specific domains)
@@ -82,7 +84,7 @@ export const createWebsearchTool = ({ managed }: { managed?: ManagedAgent }) => 
     description: `Search the web and return titles, snippets, and URLs.
 
 Use when you need current information, docs, or to discover URLs (then webfetch). Prefer over webfetch when the URL is unknown.
-Supports domain allow/block filters. Provider is chosen automatically (Brave when a key is configured, else DuckDuckGo).
+Supports domain allow/block filters. Provider is chosen automatically (Brave when a key is configured, else Exa, else DuckDuckGo).
 
 When answering from search results, include a Sources section with markdown links: [Title](URL).
 Use the current year from <current_date> in turn context for time-sensitive queries.`,

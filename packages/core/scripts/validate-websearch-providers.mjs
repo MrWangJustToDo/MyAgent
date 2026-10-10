@@ -111,25 +111,67 @@ registerCoreEnv({
   },
   runCommand: async () => ({ stdout: "", stderr: "", code: 0 }),
   exec: async () => ({ stdout: "", stderr: "", code: 0 }),
-  fetch: async () =>
-    new Response(
+  fetch: async (url) => {
+    // Exa MCP — SSE framing with a Google-style `Highlights:` body.
+    if (String(url).includes("mcp.exa.ai")) {
+      const payload = {
+        result: {
+          content: [
+            {
+              type: "text",
+              text: [
+                "Title: Example",
+                "URL: https://example.com",
+                "Highlights:",
+                "Hello from Exa",
+                "---",
+                "Title: Second",
+                "URL: https://second.example.com",
+                "Content:",
+                "Another body",
+              ].join("\n"),
+            },
+          ],
+        },
+      };
+      return new Response(`event: message\ndata: ${JSON.stringify(payload)}\n\n`, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }
+    // Everything else — DuckDuckGo HTML.
+    return new Response(
       `<div class="result web-result"><a class="result__a" href="https://example.com">Example</a><a class="result__snippet">Hi</a></div>`,
       { status: 200, headers: { "content-type": "text/html" } }
-    ),
+    );
+  },
 });
 
 try {
   initializeProviders();
   const pm = getProviderManager();
+
+  // No braveApiKey → auto selects the free Exa provider.
   const selected = await pm.selectProvider();
-  assert.equal(selected.name, "duckduckgo");
+  assert.equal(selected.name, "exa");
 
   const outcome = await pm.search("test query", { maxResults: 3, timeoutMs: 5000 });
-  assert.equal(outcome.provider, "duckduckgo");
-  assert.ok(outcome.results.length >= 1);
+  assert.equal(outcome.provider, "exa");
+  assert.equal(outcome.results.length, 2);
   assert.equal(outcome.results[0].url, "https://example.com");
+  assert.equal(outcome.results[0].title, "Example");
+  assert.equal(outcome.results[0].snippet, "Hello from Exa");
+  assert.equal(outcome.results[1].url, "https://second.example.com");
+  assert.equal(outcome.results[1].snippet, "Another body");
 
-  // With braveApiKey configured, brave becomes available
+  // Explicitly prefer duckduckgo — still selectable and parses HTML.
+  pm.configure({ provider: "duckduckgo" });
+  assert.equal((await pm.selectProvider()).name, "duckduckgo");
+  const ddg = await pm.search("test query", { maxResults: 3, timeoutMs: 5000 });
+  assert.equal(ddg.provider, "duckduckgo");
+  assert.equal(ddg.results[0].url, "https://example.com");
+
+  // With braveApiKey configured, brave becomes available (auto → first in order).
   pm.configure({ braveApiKey: "test-key" });
   assert.equal(await (await pm.selectProvider()).name, "brave");
 } finally {

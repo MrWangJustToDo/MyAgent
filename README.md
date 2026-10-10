@@ -48,7 +48,7 @@ A **runtime-agnostic** AI coding agent — same core logic, runs in terminal, Ch
 | **Code Mode** | Sandboxed TypeScript execution via TanStack `ai-code-mode` — the model can write and run TS in an isolated V8 context with a curated subset of agent tools exposed as `external_*` functions (read-only fs eager, shell/websearch lazy) |
 | **MCP Integration** | Connect to external MCP servers for additional tools |
 | **LSP / Tree-sitter** | Built-in LSP extension: diagnostics, hover, definition, references, symbols, completions, rename, code actions + structural tree-sitter search/rewrite (`.lsp.json` config) |
-| **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo) + page fetch |
+| **Web** | Multi-provider search (Brave when host passes `toolConfig.websearch.braveApiKey`, else free Exa MCP, else DuckDuckGo) + page fetch |
 | **Devtools** | Built-in [myreact-devtools](https://github.com/MrWangJustToDo/myreact-devtools) for debugging |
 
 ---
@@ -318,9 +318,9 @@ MODEL=deepseek-v4-flash
 # Sandbox: native (no sandbox) | local (OS sandbox)
 SANDBOX_ENV=native
 
-# Optional websearch
+# Optional websearch (default: free Exa MCP, no key required)
 # BRAVE_API_KEY=...
-# WEBSEARCH_PROVIDER=brave   # or duckduckgo / auto
+# WEBSEARCH_PROVIDER=brave   # or exa / duckduckgo / auto
 
 # Remote planes (CLI: --remote-env and --remote-provider combine freely;
 # --remote-session is exclusive — cannot be combined with the other two.
@@ -430,7 +430,7 @@ mention-only.
 |----------|-------|
 | **File** | `read_file`, `write_file`, `edit_file`, `delete_file`, `glob`, `grep`, `tree`, `list_file` |
 | **System** | `run_command`, `get_command_output`, `kill_command` |
-| **Web** | `websearch` (Brave when host passes `toolConfig.websearch.braveApiKey`, else DuckDuckGo), `webfetch` |
+| **Web** | `websearch` (Brave when host passes `toolConfig.websearch.braveApiKey`, else free Exa MCP, else DuckDuckGo), `webfetch` |
 | **Agent** | `task` (subagents), `ask_user`, `todo` |
 | **Skills** | `list_skills`, `load_skill` |
 | **Memory** | `memory_list`, `memory_read`, `memory_write` |

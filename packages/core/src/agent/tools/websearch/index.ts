@@ -8,6 +8,7 @@
 import { getProviderManager, resetProviderManager } from "./provider.js";
 import { braveProvider } from "./providers/brave.js";
 import { duckduckgoProvider } from "./providers/duckduckgo.js";
+import { exaProvider } from "./providers/exa.js";
 
 import type { WebsearchToolConfig } from "../tool-config.js";
 import type { SearchProvider, SearchResult, SearchOptions, SearchOutcome, ProviderInfo } from "./types.js";
@@ -19,6 +20,7 @@ export { filterResultsByDomain } from "./domain-filter.js";
 export { createTimeoutAbort } from "./abort-timeout.js";
 export { duckduckgoProvider } from "./providers/duckduckgo.js";
 export { braveProvider } from "./providers/brave.js";
+export { exaProvider, parseExaResults, parseExaResponse } from "./providers/exa.js";
 
 // ============================================================================
 // Initialization
@@ -31,7 +33,8 @@ let initialized = false;
  *
  * Registration order determines preference (first available wins):
  * 1. Brave (API-based, when braveApiKey is configured)
- * 2. DuckDuckGo (free, always available fallback)
+ * 2. Exa (free public MCP endpoint, no key — default free provider)
+ * 3. DuckDuckGo (free HTML scrape, last-resort fallback)
  *
  * Pass {@link WebsearchToolConfig} so secrets come from the host, not CoreEnv.
  */
@@ -40,6 +43,7 @@ export function initializeProviders(config?: WebsearchToolConfig): void {
     initialized = true;
     const pm = getProviderManager();
     pm.register(braveProvider);
+    pm.register(exaProvider);
     pm.register(duckduckgoProvider);
   }
   getProviderManager().configure(config);
