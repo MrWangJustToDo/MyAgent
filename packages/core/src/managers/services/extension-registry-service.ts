@@ -14,6 +14,7 @@ import { compareDispatchRank, DEFAULT_EXTENSION_ORDER, INCUMBENT_RANK } from "..
 import { forgetToolPresentationOwner } from "../../agent/tools/presentation/registry.js";
 import { defineServerTool } from "../../agent/tools/runtime/define-tool.js";
 import { toModelOutputRegistry } from "../../agent/tools/runtime/to-model-output-registry.js";
+import { withTimeoutAbort } from "../../agent/tools/util/abort-timeout.js";
 
 import type { DispatchRank } from "../../agent/dispatch-order.js";
 import type {
@@ -22,36 +23,10 @@ import type {
   ExtensionRunner,
   ExtensionToolDefinition,
 } from "../../agent/extension";
-import type { ToolCallResult } from "../../agent/extension/types.js";
 import type { McpManager } from "../../agent/mcp/manager.js";
 import type { SkillRegistry } from "../../agent/skills";
 import type { TodoManager } from "../../agent/todo";
 import type { ToolsRecord } from "../../agent/tools/runtime/tools-record.js";
-
-/**
- * Bound an extension tool's `execute` by a wall-clock budget.
- *
- * The extension keeps running (there is no way to cancel a promise), but the tool
- * call fails with a message naming the budget instead of hanging the turn forever,
- * and the caller is free to continue. The late result is discarded.
- */
-async function withTimeout(
-  result: Promise<ToolCallResult>,
-  timeoutMs: number,
-  toolName: string
-): Promise<ToolCallResult> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      result,
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs}ms`)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 /** Callbacks the caller (ManagedAgent) supplies for tool registration. */
 export interface ExtensionToolRegistrationContext {
@@ -226,17 +201,27 @@ export class ExtensionRegistryService {
       lazy: def.lazy,
       needsApproval: def.needsApproval,
       execute: async (args, toolCtx) => {
-        const run = () =>
+        const run = (deadlineSignal: AbortSignal | undefined) =>
           def.execute(args, {
             toolCallId: toolCtx.toolCallId,
+            // `abortSignal` stays the RUN signal for classification; the deadline-linked signal is
+            // handed over separately so a timeout is never misread as a user cancel.
             abortSignal: toolCtx.abortSignal,
+            deadlineSignal,
             // Fallback ONLY. `defineServerTool` already resolves the id from the run context
             // (`ToolRunContext.agentId`, set per run by the runner), and that value describes
             // the run actually executing while this one merely records which agent the tool was
             // registered on. Keep the run's value when present.
             agentId: toolCtx.agentId ?? ctx.agentId,
           });
-        return def.timeoutMs === undefined ? run() : withTimeout(run(), def.timeoutMs, def.name);
+        if (def.timeoutMs === undefined) return run(undefined);
+        // One deadline implementation across tool sources (see `withTimeoutAbort`): a timeout is a
+        // typed `ExecutionError("timeout")`, not a plain `Error`, and a run abort still wins.
+        return withTimeoutAbort((signal) => run(signal), {
+          timeoutMs: def.timeoutMs,
+          signal: toolCtx.abortSignal,
+          timeoutMessage: `Tool "${def.name}" timed out after ${def.timeoutMs}ms`,
+        });
       },
       present: def.present,
       toModelOutput: def.toModelOutput,

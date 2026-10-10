@@ -1,6 +1,7 @@
 import { toolDefinition, type InferSchemaType, type SchemaInput, type ServerTool, type ClientTool } from "@tanstack/ai";
 
 import { declareToolPresentation } from "../presentation/registry.js";
+import { withTimeoutAbort } from "../util/abort-timeout.js";
 
 import { toModelOutputRegistry, type ModelToolContent, type ToModelOutputContext } from "./to-model-output-registry.js";
 
@@ -12,9 +13,26 @@ import type { ToolPresentation } from "../presentation/types.js";
 
 export interface ToolExecuteCtx {
   toolCallId: string;
+  /**
+   * The RUN's abort signal — aborted only when the run is stopped (user / parent), never by the
+   * tool's own `timeoutMs`. Classify a caught error against THIS signal
+   * (`isAbortError(err, ctx.abortSignal)`) to decide "cancelled": it stays live across a deadline
+   * expiry, so a timeout is not misread as a user cancel.
+   */
   abortSignal?: AbortSignal;
+  /**
+   * The run signal composed with the tool's declared {@link defineServerTool} `timeoutMs`.
+   *
+   * Aborts on a run abort OR on deadline expiry (its reason is then `ExecutionError("timeout")`),
+   * so pass it to cancellable work (fetch). Present only when the tool declared a deadline.
+   * Deliberately separate from {@link abortSignal}: a body that classified with this signal would
+   * read a timeout as a cancel because `isAbortError` short-circuits on `signal.aborted`.
+   */
+  deadlineSignal?: AbortSignal;
   /** Managed agent id from {@link ToolRunContext} when available. */
   agentId?: string;
+  /** The tool's declared deadline, when it has one (see {@link defineServerTool} `timeoutMs`). */
+  timeoutMs?: number;
 }
 
 export type { ModelToolContent, ToModelOutputContext };
@@ -37,6 +55,16 @@ export function defineServerTool<
   inputSchema?: TInput;
   outputSchema?: TOutput;
   needsApproval?: boolean;
+  /**
+   * Optional execution deadline. When declared, the runtime enforces it around {@link execute}
+   * and passes the body a signal that aborts when the deadline elapses (see
+   * {@link withTimeoutAbort}).
+   *
+   * Opt-in: a tool with no `timeoutMs` is unbounded, so long-running tools are unaffected. A
+   * deadline is a typed failure (`ExecutionError("timeout")`), never a user cancel; a run abort
+   * still settles as cancelled because the run signal is consulted first.
+   */
+  timeoutMs?: number;
   /**
    * Lazy tools are excluded from the initial request; the model discovers them
    * by name via the synthetic `__lazy__tool__discovery__` tool and gets the full
@@ -109,10 +137,26 @@ export function defineServerTool<
     lazy: config.lazy,
   }).server(async (args, ctx) => {
     const runContext = ctx?.context as { agentId?: string } | undefined;
-    return config.execute(args, {
+    const execCtx: ToolExecuteCtx = {
       toolCallId: ctx?.toolCallId ?? "",
       abortSignal: ctx?.abortSignal,
       agentId: runContext?.agentId,
+      timeoutMs: config.timeoutMs,
+    };
+
+    // No deadline declared: pass the run signal through untouched, byte-identical to before.
+    if (config.timeoutMs === undefined) {
+      return config.execute(args, execCtx);
+    }
+
+    // The deadline-linked signal is exposed as `deadlineSignal`, NOT `abortSignal`, so a body that
+    // classifies a caught error with `isAbortError(err, ctx.abortSignal)` still reads a deadline
+    // expiry as a failure (the run signal is live). `withTimeoutAbort` races the deadline
+    // independently, so a body that ignores `deadlineSignal` is still bounded.
+    return withTimeoutAbort((deadlineSignal) => config.execute(args, { ...execCtx, deadlineSignal }), {
+      timeoutMs: config.timeoutMs,
+      signal: ctx?.abortSignal,
+      timeoutMessage: `Tool "${config.name}" timed out after ${config.timeoutMs}ms`,
     });
   }) as ServerTool<TInput, TOutput, TName>;
 }

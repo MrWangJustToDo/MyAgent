@@ -165,6 +165,7 @@ export {
   getProviderManager,
   initializeProviders,
   resetWebsearchProviders,
+  withTimeoutAbort,
 } from "../agent/tools/websearch";
 export { resolveSelectedMemoryFilename } from "../agent/memory/memory-retrieval.js";
 export { MemoryManager } from "../agent/memory/memory-manager.js";
@@ -247,6 +248,7 @@ export type {
 export { loadAgentDoc, formatAgentDocResult } from "../agent/prompt/agent-doc-loader.js";
 export type { AgentDocLoadResult, AgentDocLoaderConfig } from "../agent/prompt/agent-doc-loader.js";
 export { toolsToArray } from "../agent/tools/runtime/tools-record.js";
+export { defineServerTool } from "../agent/tools/runtime/define-tool.js";
 export {
   DEFAULT_REFRESH_MESSAGE_THRESHOLD,
   SUBAGENT_ALLOWED_KINDS,

@@ -222,7 +222,8 @@
     "validate:tool-output-cache": "pnpm run build && node scripts/validate-tool-output-cache.mjs",
     "validate:repeat-reminder": "pnpm run build && node scripts/validate-repeat-reminder.mjs",
     "validate:cancel-semantics": "pnpm run build && node scripts/validate-cancel-semantics.mjs",
-    "validate:extension-order": "pnpm run build && node scripts/validate-extension-order.mjs"
+    "validate:extension-order": "pnpm run build && node scripts/validate-extension-order.mjs",
+    "validate:tool-timeout-contract": "pnpm run build && node scripts/validate-tool-timeout-contract.mjs"
   },
   "dependencies": {
     "@tanstack/ai": "^0.65.1",

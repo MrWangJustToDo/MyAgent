@@ -133,9 +133,11 @@ Use the current year from <current_date> in turn context for time-sensitive quer
         const managedAgent = managed;
         const hasParentAgent = managedAgent?.parentId;
 
-        abortSignal?.addEventListener("abort", () => {
-          controller.abort();
-        });
+        // Carry the run's abort reason (`"user-cancelled"`, …) rather than a bare abort — a
+        // reason-less abort becomes the platform `AbortError`, which reads as a cancel only by
+        // name. Detached after the call so a long run does not accumulate one listener per search.
+        const onAbort = () => controller.abort(abortSignal?.reason);
+        abortSignal?.addEventListener("abort", onAbort, { once: true });
 
         if (!hasParentAgent) {
           managedAgent?.addPendingAbortController(controller);
@@ -165,6 +167,7 @@ Use the current year from <current_date> in turn context for time-sensitive quer
           if (!isAbortError(err, abortSignal)) throw err;
           return { query, results: [], provider: "", cancelled: true };
         } finally {
+          abortSignal?.removeEventListener("abort", onAbort);
           if (!hasParentAgent) {
             managedAgent?.removePendingAbortController(controller);
           }

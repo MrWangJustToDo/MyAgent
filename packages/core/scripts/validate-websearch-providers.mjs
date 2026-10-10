@@ -179,4 +179,43 @@ try {
   resetWebsearchProviders();
 }
 
+// A user abort must short-circuit provider fallback (`ProviderManager.search`): the aborted call
+// rethrows the abort instead of trying the next provider, and never masks it as "all failed"
+// (which would not read as a cancel to an error-only consumer).
+{
+  resetWebsearchProviders();
+  const pm = getProviderManager();
+  const calls = [];
+  const abortError = () => {
+    const error = new Error("The operation was aborted");
+    error.name = "AbortError";
+    return error;
+  };
+  pm.register({
+    name: "p_abort",
+    isAvailable: async () => true,
+    search: async () => {
+      calls.push("p_abort");
+      throw abortError();
+    },
+  });
+  pm.register({
+    name: "p_next",
+    isAvailable: async () => true,
+    search: async () => {
+      calls.push("p_next");
+      return [];
+    },
+  });
+
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    () => pm.search("q", { signal: controller.signal }),
+    (error) => error.name === "AbortError"
+  );
+  assert.deepEqual(calls, ["p_abort"], "an aborted signal must not fall through to the next provider");
+  resetWebsearchProviders();
+}
+
 console.log("websearch-providers validation passed");

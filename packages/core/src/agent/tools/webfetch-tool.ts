@@ -158,9 +158,11 @@ Usage notes:
 
         const hasParentAgent = managedAgent?.parentId;
 
-        abortSignal?.addEventListener("abort", () => {
-          controller.abort();
-        });
+        // Carry the run's abort reason so the linked fetch controller aborts with it (a bare
+        // abort becomes the platform `AbortError`), and detach after the call so a long run does
+        // not accumulate one listener per fetch.
+        const onAbort = () => controller.abort(abortSignal?.reason);
+        abortSignal?.addEventListener("abort", onAbort, { once: true });
 
         try {
           if (!hasParentAgent) {
@@ -289,6 +291,7 @@ Usage notes:
             cachedOutputPath: null,
           };
         } finally {
+          abortSignal?.removeEventListener("abort", onAbort);
           if (!hasParentAgent) {
             managedAgent?.removePendingAbortController(controller);
           }

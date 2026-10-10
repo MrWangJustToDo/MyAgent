@@ -20,7 +20,20 @@ export type { ModelCapability } from "../../models/types.js";
 
 export interface ToolExecutionOptions {
   toolCallId: string;
+  /**
+   * The RUN's abort signal — aborted only when the run is stopped (user / parent), never by the
+   * tool's own `timeoutMs`. Classify a caught error against THIS signal to decide "cancelled".
+   */
   abortSignal?: AbortSignal;
+  /**
+   * The run signal composed with the extension tool's declared `timeoutMs`.
+   *
+   * Aborts on a run abort OR on deadline expiry (its reason is then `ExecutionError("timeout")`),
+   * so pass it to cancellable work (fetch). Present only when the tool declared `timeoutMs`.
+   * Deliberately separate from {@link abortSignal}: classifying with this signal would read a
+   * timeout as a cancel (`isAbortError` short-circuits on `signal.aborted`).
+   */
+  deadlineSignal?: AbortSignal;
   /**
    * Id of the agent running this tool call.
    *

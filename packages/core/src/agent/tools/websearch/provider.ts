@@ -86,6 +86,13 @@ export class ProviderManager {
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
 
+      // A user abort is not a provider failure: do not fall back to another provider, and do not
+      // mask the abort behind an "all providers failed" message. The abort must survive to the
+      // caller, which classifies it against the run signal (`isAbortError`). A genuine timeout
+      // is different — it aborts the provider's own controller, not `options.signal`, so the
+      // fallback still runs for it.
+      if (options?.signal?.aborted) throw lastError;
+
       for (const provider of this.providers) {
         if (provider === primary) continue;
         if (!(await this.isProviderAvailable(provider))) continue;
@@ -94,6 +101,7 @@ export class ProviderManager {
           return { results, provider: provider.name };
         } catch (fallbackErr) {
           lastError = fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));
+          if (options?.signal?.aborted) throw lastError;
         }
       }
     }

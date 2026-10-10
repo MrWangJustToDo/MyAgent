@@ -17,7 +17,7 @@ export type { SearchProvider, SearchResult, SearchOptions, SearchOutcome, Provid
 
 export { ProviderManager, getProviderManager, resetProviderManager } from "./provider.js";
 export { filterResultsByDomain } from "./domain-filter.js";
-export { createTimeoutAbort } from "./abort-timeout.js";
+export { createTimeoutAbort, withTimeoutAbort } from "../util/abort-timeout.js";
 export { duckduckgoProvider } from "./providers/duckduckgo.js";
 export { braveProvider } from "./providers/brave.js";
 export { exaProvider, parseExaResults, parseExaResponse } from "./providers/exa.js";

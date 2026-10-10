@@ -12,7 +12,7 @@
  */
 
 import { getEnv } from "../../../../env.js";
-import { createTimeoutAbort } from "../abort-timeout.js";
+import { createTimeoutAbort } from "../../util/abort-timeout.js";
 import { filterResultsByDomain } from "../domain-filter.js";
 
 import type { SearchProvider, SearchResult, SearchOptions } from "../types.js";
