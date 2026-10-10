@@ -1,4 +1,6 @@
 import { commandJobRegistry, type CompletedCommandJob } from "../../agent/tools/util/command-job-registry.js";
+import { truncateString } from "../../agent/tools/util/output-limits.js";
+import { formatContextSectionUserContent } from "../../agent/turn-context";
 import { injectSyntheticMessages } from "../../agent/turn-context/synthetic-injection.js";
 
 import { defineMiddleware } from "./phase.js";
@@ -16,8 +18,7 @@ export interface BackgroundNotificationMiddlewareDeps {
   persistMessages: (next: UIMessage[]) => void;
 }
 
-const OPEN = "<ctx kind=background_notification>";
-const CLOSE = "</ctx>";
+const BACKGROUND_NOTIFICATION_KIND = "background_notification";
 
 /**
  * Lightweight completion notification for background jobs.
@@ -62,7 +63,7 @@ export function createBackgroundNotificationMiddleware(
       // reaches this point exactly once. Appended at the end (one-shot semantics).
       const { messages: next } = injectSyntheticMessages(
         messages,
-        [{ kind: "background_notification", content: formatNotifications(completed, maxOutputChars) }],
+        [{ kind: BACKGROUND_NOTIFICATION_KIND, content: formatNotifications(completed, maxOutputChars) }],
         { ui, persist: deps.persistMessages }
       );
 
@@ -76,19 +77,13 @@ function formatNotifications(jobs: CompletedCommandJob[], maxOutputChars: number
     const status = job.status === "exited" ? "completed" : job.status;
     const exit = job.exitCode == null ? "n/a" : String(job.exitCode);
     const body = [`Job ${job.id} finished with status ${status} (exit code ${exit}).`, `Command: ${job.command}`];
-    const out = cap(job.stdout, maxOutputChars);
-    const err = cap(job.stderr, maxOutputChars);
+    // Keep the tail (most recent output) within the per-job cap.
+    const out = truncateString(job.stdout, maxOutputChars, true).text;
+    const err = truncateString(job.stderr, maxOutputChars, true).text;
     if (out) body.push(`stdout:\n${out}`);
     if (err) body.push(`stderr:\n${err}`);
     return body.join("\n");
   });
 
-  return `${OPEN}\n${sections.join("\n\n")}\n${CLOSE}`;
-}
-
-function cap(text: string, max: number): string {
-  if (!text) return "";
-  if (text.length <= max) return text;
-  const kept = text.slice(-max);
-  return `[output truncated to last ${max} chars]\n${kept}`;
+  return formatContextSectionUserContent({ key: BACKGROUND_NOTIFICATION_KIND, content: sections.join("\n\n") });
 }
