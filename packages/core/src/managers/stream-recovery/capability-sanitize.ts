@@ -1,9 +1,11 @@
 import {
+  chatMessagesHaveMultimodal,
   isMultimodalUnsupportedError,
   unsupportedMultimodalPartTypes,
 } from "../../models/adapter/capability-message-utils.js";
 
 import type { ManagedAgent } from "../managed-agent.js";
+import type { ModelMessage, UIMessage } from "@tanstack/ai";
 
 /** Every multimodal part type — the drop set of a post-rejection retry. */
 const ALL_MULTIMODAL_PART_TYPES = ["image", "audio", "video", "document"] as const;
@@ -19,7 +21,7 @@ const ALL_MULTIMODAL_PART_TYPES = ["image", "audio", "video", "document"] as con
  *
  * @returns true when a strip was armed (the model lacks at least one modality).
  */
-export function armCapabilityStrip(managed: ManagedAgent): boolean {
+export function armCapabilityStrip(managed: ManagedAgent, messages?: Array<UIMessage | ModelMessage>): boolean {
   const drop = unsupportedMultimodalPartTypes(managed.usage ?? null);
   if (drop.size === 0) {
     managed.run.setWireDropPartTypes(null);
@@ -27,7 +29,17 @@ export function armCapabilityStrip(managed: ManagedAgent): boolean {
   }
 
   managed.run.setWireDropPartTypes(drop);
-  managed.log?.warn("agent", `Stripping unsupported multimodal parts for model capabilities: ${[...drop].join(", ")}`);
+  // Only when this run's messages actually carry a droppable part. The drop set is armed on
+  // every run (it must be, for every wire build), so an unconditional line here logged once
+  // per model iteration for the whole run — 532 times in one real 2.3 MB session log, ~24%
+  // of its lines, all identical. When a message carries no multimodal part the strip is a
+  // no-op, and saying so on every iteration is noise that buries the lines that matter.
+  if (!messages || chatMessagesHaveMultimodal(messages, drop)) {
+    managed.log?.warn(
+      "agent",
+      `Stripping unsupported multimodal parts for model capabilities: ${[...drop].join(", ")}`
+    );
+  }
   return true;
 }
 

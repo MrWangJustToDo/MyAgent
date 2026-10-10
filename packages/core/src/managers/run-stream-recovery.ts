@@ -186,7 +186,9 @@ export async function* runStreamWithRecovery(options: RecoveryOptions): AsyncIte
   options.managed.run.resetWireOverride();
   // Arm the pre-send capability strip for this run. The drop set is applied by the
   // `wire-recovery` middleware on every wire build — see `armCapabilityStrip`.
-  armCapabilityStrip(options.managed);
+  // The messages are passed so the strip is only *reported* when this run actually carries a
+  // droppable part; with none it is a no-op and the per-run line would be pure noise.
+  armCapabilityStrip(options.managed, options.getMessages());
 
   const messages = options.getMessages();
   let multimodalStripAttempted = false;
