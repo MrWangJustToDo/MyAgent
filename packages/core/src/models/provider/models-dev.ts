@@ -102,6 +102,13 @@ interface ModelsDevModel {
   status?: string;
   /** Upstream-added alias linking variant models to their canonical record; unread. */
   canonical_model_id?: string;
+  /**
+   * Model kind, when upstream marks one — observed values are `embedding` and `reranking`. Its
+   * presence means "not a chat model"; absence means "chat". Unread today, so an embedding entry
+   * in the corpus is still offered as a chat model. Declared rather than ignored so the guard can
+   * see it, and so a future filter has a shape to read.
+   */
+  type?: string;
 }
 
 /**
@@ -140,8 +147,8 @@ export const MODELS_DEV_MODEL_FIELDS = [
   "provider",
   "status",
   "canonical_model_id",
+  "type",
 ] as const satisfies readonly (keyof ModelsDevModel)[];
-
 /** Keys of {@link ModelsDevCost}, checked by the same guard (same drift trap, nested). */
 export const MODELS_DEV_COST_FIELDS = [
   "input",
