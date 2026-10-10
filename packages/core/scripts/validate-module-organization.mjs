@@ -13,6 +13,11 @@
  * 3. **A public symbol has one definition.** Two `isToolCallPart` copies (one `null`-safe,
  *    one not) and two different `TaskRunPhase` unions under one name is the failure this
  *    catches — a duplicate that compiles is one whose behaviour quietly diverges.
+ * 4. **A path a document names exists.** A main spec listed `src/agent/run-helpers/` for a
+ *    directory that had been deleted, and `AGENTS.md` still named
+ *    `models/prompt-cache.ts` for a file at `models/cache/prompt-cache.ts`. Nothing read
+ *    either, so both pointed at nothing for as long as they survived. See the rule-4
+ *    section for why this checks existence only.
  *
  * Rule 3 is checked for a curated watch-list rather than every symbol: a *deliberate*
  * re-export (`export { x } from "./y.js"`) is the barrel pattern these rules encourage, so
@@ -23,13 +28,15 @@
  * Run: pnpm --filter @codent/core run validate:module-organization
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const srcRoot = join(scriptDir, "../src");
+const coreRoot = join(scriptDir, "..");
+const repoRoot = join(scriptDir, "../../..");
 
 let failures = 0;
 function check(label, fn) {
@@ -166,6 +173,107 @@ check("watched public symbols have a single definition", () => {
     if (definitions.length > 1) {
       problems.push(
         `${symbol} — defined in ${definitions.length} modules (${definitions.join(", ")}); keep one and re-export it`
+      );
+    }
+  }
+  return problems;
+});
+
+// ============================================================================
+// Rule 4 — a path a document names exists
+// ============================================================================
+//
+// A main spec required barrels in `src/agent/run-helpers/` long after that directory was
+// deleted, and `AGENTS.md` named `packages/core/src/models/prompt-cache.ts` for a file that
+// lives at `models/cache/prompt-cache.ts`. Both are the same failure — a document asserting a
+// location that is not there — and neither was visible because nothing read the documents.
+//
+// Scope is documentation and specs, not source comments. A comment naming a path is read next
+// to the code it describes and is often a deliberate generalisation ("the way
+// `runtime-types/middleware-phase.ts` does"); scanning every comment for path-shaped tokens
+// yields prose, not claims. Docs and specs exist to be accurate about the tree, they are few
+// (32 references as written), and both known-stale references live in them.
+//
+// **Existence only — deliberately not the stronger rule.** A tempting form is "an importer
+// taking 2+ symbols from one directory must use its barrel root" (`AGENTS.md`: "import from the
+// directory root when consuming 2+ symbols"). Measured against the tree that rule fails **81
+// import sites across 26 directories**, because the convention is aspirational everywhere and
+// enforced nowhere. A gate that fails 81 legitimate sites gets disabled, which is worse than no
+// gate — it teaches that the *other* rules here are negotiable. So rule 4 checks what is binary
+// and what actually broke: does the path resolve.
+
+/** Documents whose path claims are checked. */
+function documentationFiles() {
+  const docs = [join(repoRoot, "AGENTS.md"), join(repoRoot, "CLAUDE.md")];
+  const specRoot = join(repoRoot, "openspec/specs");
+  if (existsSync(specRoot)) {
+    const stack = [specRoot];
+    while (stack.length > 0) {
+      const dir = stack.pop();
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) stack.push(full);
+        else if (entry.endsWith(".md")) docs.push(full);
+      }
+    }
+  }
+  return docs.filter((file) => existsSync(file));
+}
+
+/**
+ * A path token in a document. Two spellings are in use and both are checked:
+ *
+ * - fully qualified — `` `packages/core/src/models/types.ts` ``;
+ * - package-relative — `` `agent/compaction/wire-projection.ts` ``, which every core
+ *   doc section uses because the section is already about core
+ *
+ * A bare word, a package name, or a URL is not a location claim and does not match.
+ * `src/…` is likewise treated as a claim: every such reference in this repo means a
+ * file under a package's `src/`.
+ */
+const CORE_TOP_LEVEL = ["agent", "agent-session", "dev", "env", "managers", "models", "runtime-types", "utils"];
+const DOC_PATH = new RegExp(
+  "`((?:packages/|src/)[A-Za-z0-9_\\-./]+|(?:" + CORE_TOP_LEVEL.join("|") + ")/[A-Za-z0-9_\\-./]+\\.ts)`",
+  "g"
+);
+
+/**
+ * Lines that *name* a path in order to forbid or contrast it — "not as `agent/tools/webfetch-html.ts`".
+ * The path is not a claim that the file exists; `core-tool-layout`'s scenario is the case, and
+ * resolving it would demand recreating the layout that requirement exists to prevent.
+ *
+ * Deliberately line-scoped and noun-phrase-explicit: a bare "no" or "not" elsewhere in a
+ * paragraph must not suppress a real claim, so the marker has to be adjacent ("not as",
+ * "never as", "instead of", "rather than") — within 24 characters before the token.
+ */
+const NEGATIVE_CONTEXT = /(?:not as|never as|instead of|rather than)\s*$/;
+
+/** Every package's `src/` root, so a package-relative token resolves against each. */
+function packageSrcRoots() {
+  const roots = [join(coreRoot, "src")];
+  for (const entry of readdirSync(join(repoRoot, "packages"))) {
+    const src = join(repoRoot, "packages", entry, "src");
+    if (existsSync(src) && statSync(src).isDirectory()) roots.push(src);
+  }
+  return roots;
+}
+
+check("every path named by a document resolves", () => {
+  const problems = [];
+  const bases = [repoRoot, coreRoot, ...packageSrcRoots()];
+  for (const doc of documentationFiles()) {
+    const text = readFileSync(doc, "utf8");
+    for (const match of text.matchAll(DOC_PATH)) {
+      const named = match[1];
+      if (named.includes("*")) continue;
+      if (NEGATIVE_CONTEXT.test(text.slice(Math.max(0, match.index - 24), match.index))) continue;
+      // A trailing slash is a directory reference; strip it so `packages/codent/scripts/`
+      // resolves to the directory it plainly means.
+      const cleaned = named.replace(/\/$/, "");
+      if (bases.some((base) => existsSync(join(base, cleaned)))) continue;
+      const line = text.slice(0, match.index).split("\n").length;
+      problems.push(
+        `${relative(repoRoot, doc)}:${line} names \`${named}\` — no such file or directory (see AGENTS.md "Documentation Style"); if this is an example rather than a claim, mark it with \`not as …\``
       );
     }
   }

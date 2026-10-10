@@ -594,14 +594,14 @@ Frozen system text ends with `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` and stays byte-sta
 Per-turn dynamic context is injected as synthetic `<ctx kind=...>` user messages by the turn-context middleware `onConfig` (after compaction) whenever a section's content hash changes (persisted in `uiMessages`, hidden in the transcript UI; per-kind supersede notices mark refreshed sections).
 `<current_date>` uses **day** granularity (not hour/minute) so the payload stays stable within a calendar day.
 `findCutPointByBudget` skips synthetic `<ctx kind=...>` messages when walking the token-budget boundary.
-All synthetic injections (turn-context sections, memory, background-command completion notifications) share one helper (`managers/middleware/synthetic-injection.ts`): stable `ctx-<kind>-<hash>` ids, channel + wire in sync, persisted to the session (no cross-turn prefix divergence). Background notifications use `append` position and `<ctx kind=background_notification>`; any future injection must reuse this helper and shell.
+All synthetic injections (turn-context sections, memory, background-command completion notifications) share one helper (`agent/turn-context/synthetic-injection.ts`): stable `ctx-<kind>-<hash>` ids, channel + wire in sync, persisted to the session (no cross-turn prefix divergence). Background notifications use `append` position and `<ctx kind=background_notification>`; any future injection must reuse this helper and shell.
 `prompt-cache-middleware` then:
 
 - **Anthropic** — `cache_control: { type: "ephemeral" }` on frozen system, last tool definition, and latest user message (tool-loop friendly)
 - **OpenAI-compatible** — `prompt_cache_key` from session id (≤64 chars)
 - **All styles** — tools sorted by name for stable schemas
 
-Helpers: `packages/core/src/models/prompt-cache.ts`. Validate: `pnpm --filter @codent/core run validate:prompt-cache`.
+Helpers: `packages/core/src/models/cache/prompt-cache.ts`. Validate: `pnpm --filter @codent/core run validate:prompt-cache`.
 
 ### Context-window fill has ONE reading (`getContextFillTokens()`)
 
@@ -629,7 +629,7 @@ The bug this replaced: the percentage divided `window.inputTokens` by the limit,
 
 - **Cache before parse.** `applyToolCompact` consults `ToolCompactCache` *before* `parseToolMessageOutput`. Decoding a tool payload runs on every model call and its result is discarded on a hit — that decode was most of the cost: 0.49 ms/call → 0.05 ms/call for 60 results × 25 KB, and 2.00 ms → ~0.05 ms at
 100 KB payloads (what remains is the O(results) scan + Map lookups).
-- **One projection.** `projectWireFromChannel` (`managers/middleware/wire-projection.ts`) is shared by the compaction middleware and `ManagedAgent.getMessagesForLLM` (manual `/compact`, reactive compact, memory extraction), over the agent's single `WireProjectionCache`. A second implementation is what would let a reader disagree with the window the model receives.
+- **One projection.** `projectWireFromChannel` (`agent/compaction/wire-projection.ts`) is shared by the compaction middleware and `ManagedAgent.getMessagesForLLM` (manual `/compact`, reactive compact, memory extraction), over the agent's single `WireProjectionCache`. A second implementation is what would let a reader disagree with the window the model receives.
 
 Validate: `pnpm --filter @codent/core run validate:message-ops-purity`.
 
