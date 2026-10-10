@@ -26,6 +26,7 @@ import {
   createMessageTransformMiddleware,
   createPlanModeMiddleware,
   createPromptCacheMiddleware,
+  createRepeatReminderMiddleware,
   createStatusMiddleware,
   createTaskPreforkMiddleware,
   createToolCompactMiddleware,
@@ -66,6 +67,7 @@ const FACTORIES = [
   createEarlyToolResultUiMiddleware,
   createTaskPreforkMiddleware,
   createPlanModeMiddleware,
+  createRepeatReminderMiddleware,
   createBackgroundNotificationMiddleware,
   createPromptCacheMiddleware,
 ];

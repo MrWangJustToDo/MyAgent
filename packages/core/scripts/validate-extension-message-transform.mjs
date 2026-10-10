@@ -35,6 +35,7 @@ import {
   createEarlyToolResultUiMiddleware,
   createTaskPreforkMiddleware,
   createPlanModeMiddleware,
+  createRepeatReminderMiddleware,
   createBackgroundNotificationMiddleware,
   createPromptCacheMiddleware,
   CANONICAL_MIDDLEWARE_ORDER,
@@ -682,6 +683,7 @@ await runCase("pipeline assembles with the new middleware in canonical order", a
     createEarlyToolResultUiMiddleware(stub),
     createTaskPreforkMiddleware(stub),
     createPlanModeMiddleware(stub),
+    createRepeatReminderMiddleware(stub),
     createBackgroundNotificationMiddleware(stub),
     createPromptCacheMiddleware(stub),
   ];

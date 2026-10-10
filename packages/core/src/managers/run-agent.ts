@@ -22,6 +22,7 @@ import {
   createMessageTransformMiddleware,
   createPlanModeMiddleware,
   createPromptCacheMiddleware,
+  createRepeatReminderMiddleware,
   createStatusMiddleware,
   createTaskPreforkMiddleware,
   createToolCompactMiddleware,
@@ -221,6 +222,13 @@ export function buildAgentRunner(
     }),
     createPlanModeMiddleware({
       getPlanMode: () => planMode,
+    }),
+    // Advisory loop hygiene: nudge the model out of identical tool-call loops. Counts
+    // attempts and injects a synthetic reminder before the next LLM call (after the
+    // repeated call's result), persisted like the background notification.
+    createRepeatReminderMiddleware({
+      getUIChannel: () => deps.getUIChannel() ?? undefined,
+      persistMessages: (next) => deps.shouldPersistUIMessage(next, "user-message"),
     }),
     // Surface finished background jobs as a lightweight notification before each LLM call.
     // Both injects the notification into the current run's messages AND persists it as an

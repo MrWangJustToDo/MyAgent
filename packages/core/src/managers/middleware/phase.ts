@@ -42,6 +42,7 @@ export const CANONICAL_MIDDLEWARE_ORDER = [
   "early-tool-result-ui",
   "task-prefork",
   "plan-mode",
+  "repeat-reminder",
   "background-notification",
   "prompt-cache",
 ] as const;
